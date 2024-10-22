@@ -4,11 +4,13 @@ project(gem)
 if(NOT TARGET Garfield::Garfield)
   find_package(Garfield REQUIRED)
 endif()
+find_package(HDF5 REQUIRED COMPONENTS CXX)
 
 # ---Build executable------------------------------------------------------------
 add_compile_options(-Wall -Wextra -Wpedantic)
 add_executable(simulation simulation.C)
-target_link_libraries(simulation Garfield::Garfield)
+target_link_libraries(simulation Garfield::Garfield ${HDF5_LIBRARIES})
+target_include_directories(simulation PRIVATE ${HDF5_INCLUDE_DIRS})
 
 # ---Copy all files locally to the build directory-------------------------------
 foreach(_file degrad.run config_template/chip_1_board_0_fec_0_fsr.txt config_template/chip_1_board_0_fec_0_matrix.txt config_template/chip_1_board_0_fec_0_threshold.txt)

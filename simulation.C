@@ -9,6 +9,7 @@
 #include "stdio.h"
 #include <unistd.h>
 #include <cstdlib>
+#include "H5Cpp.h"
 
 #include <TCanvas.h>
 #include <TROOT.h>
@@ -36,6 +37,174 @@ using namespace Garfield;
 using namespace std;
 
 TRandom degrad_random;
+
+struct pix_data_t {
+    uint8_t data_header;
+    uint8_t header;
+    uint64_t hit_index;
+    uint8_t x;
+    uint8_t y;
+    uint16_t TOA;
+    uint16_t TOT;
+    uint16_t EventCounter;
+    uint8_t HitCounter;
+    uint8_t FTOA;
+    uint16_t scan_param_id;
+    float chunk_start_time;
+    uint16_t iTOT;
+    uint64_t TOA_Extension;
+    uint64_t TOA_Combined;
+};
+
+void copy_group(H5::Group& dest_group, H5::Group& src_group);
+
+// Copy a dataset
+void copy_dataset(H5::Group& dest_group, H5::DataSet& src_dataset, const std::string& dataset_name) {
+    H5::DataSpace src_dataspace = src_dataset.getSpace();
+
+    int rank = src_dataspace.getSimpleExtentNdims();
+    std::vector<hsize_t> dims(rank);
+    src_dataspace.getSimpleExtentDims(dims.data(), NULL);
+
+    H5::DSetCreatPropList plist;
+    plist.setChunk(rank, dims.data());
+    plist.setDeflate(2);
+
+    H5::DataSet dest_dataset = dest_group.createDataSet(dataset_name, src_dataset.getDataType(), src_dataspace, plist);
+
+    std::vector<unsigned char> buffer(src_dataspace.getSelectNpoints() * src_dataset.getInMemDataSize());
+    src_dataset.read(buffer.data(), src_dataset.getDataType(), src_dataspace);
+
+    dest_dataset.write(buffer.data(), src_dataset.getDataType(), src_dataspace);
+}
+
+// iteration trough a HDF5 group
+herr_t copy_group_elements(hid_t loc_id, const char* name, const H5L_info_t* info, void* operator_data) {
+    H5::Group* dest_group = static_cast<H5::Group*>(operator_data);
+    H5::Group src_group(loc_id);
+
+    H5O_info_t obj_info;
+    H5Oget_info_by_name(src_group.getId(), name, &obj_info, H5P_DEFAULT);
+
+    if (obj_info.type == H5O_TYPE_GROUP) {
+        H5::Group src_sub_group = src_group.openGroup(name);
+        H5::Group dest_sub_group = dest_group->createGroup(name);
+        copy_group(dest_sub_group, src_sub_group);
+    } else if (obj_info.type == H5O_TYPE_DATASET) {
+        H5::DataSet src_dataset = src_group.openDataSet(name);
+        copy_dataset(*dest_group, src_dataset, name);
+    }
+
+    return 0;
+}
+
+// copy a HDF5 group
+void copy_group(H5::Group& dest_group, H5::Group& src_group) {
+    H5Literate(src_group.getId(), H5_INDEX_NAME, H5_ITER_NATIVE, NULL, copy_group_elements, &dest_group);
+}
+
+// Create teh run configuration for the HDF5 file
+void create_configuration(H5::Group& sub_group, const std::string& src_file_name) {
+    H5::H5File src_file(src_file_name, H5F_ACC_RDONLY);
+    H5::Group src_group = src_file.openGroup("/configuration");
+
+    H5::Group configuration(sub_group.createGroup("configuration"));
+    copy_group(configuration, src_group);
+}
+
+void create_configuration(H5::Group& sub_group) {
+    H5::H5File src_file("tpx3_config.h5", H5F_ACC_RDONLY);
+    H5::Group src_group = src_file.openGroup("/configuration");
+
+    H5::Group configuration(sub_group.createGroup("configuration"));
+    copy_group(configuration, src_group);
+}
+
+H5::DataSet initialize_table(H5::Group& group, H5::Group& sub_group){
+
+    H5std_string timepix_version("Timepix3");
+    H5::StrType str_type_timepix_version(H5::PredType::C_S1, timepix_version.length() + 1);
+    H5::Attribute attr = group.createAttribute("TimepixVersion", str_type_timepix_version, H5::DataSpace(H5S_SCALAR));
+    attr.write(str_type_timepix_version, timepix_version);
+
+    int center_chip = 0;
+    H5::Attribute attr_center_chip = group.createAttribute("centerChip", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+    attr_center_chip.write(H5::PredType::NATIVE_INT, &center_chip);
+
+    H5std_string run_folder_kind("rfUnknown");
+    H5::StrType str_type_run_folder_kind(H5::PredType::C_S1, run_folder_kind.length() + 1);
+    H5::Attribute attr_run_folder_kind = group.createAttribute("runFolderKind", str_type_run_folder_kind, H5::DataSpace(H5S_SCALAR));
+    attr_run_folder_kind.write(str_type_run_folder_kind, run_folder_kind);
+
+    H5std_string run_type("rfXrayFinger");
+    H5::StrType str_type_run_type(H5::PredType::C_S1, run_type.length() + 1);
+    H5::Attribute attr_run_type = group.createAttribute("runType", str_type_run_type, H5::DataSpace(H5S_SCALAR));
+    attr_run_type.write(str_type_run_type, run_type);
+
+    int bad_batch_count = 0;
+    H5::Attribute attr_bad_batch_count = sub_group.createAttribute("BadBatchCount", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+    attr_bad_batch_count.write(H5::PredType::NATIVE_INT, &bad_batch_count);
+
+    int bad_slice_count = 0;
+    H5::Attribute attr_bad_slice_count = sub_group.createAttribute("BadSliceCount", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+    attr_bad_slice_count.write(H5::PredType::NATIVE_INT, &bad_slice_count);
+
+    int batch_size = 100000000;
+    H5::Attribute attr_batch_size = sub_group.createAttribute("batchSize", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+    attr_batch_size.write(H5::PredType::NATIVE_INT, &batch_size);
+
+    int num_chips = 1;
+    H5::Attribute attr_num_chips = sub_group.createAttribute("numChips", H5::PredType::NATIVE_INT, H5::DataSpace(H5S_SCALAR));
+    attr_num_chips.write(H5::PredType::NATIVE_INT, &num_chips);
+
+    // data type for the data
+    H5::CompType mtype(sizeof(pix_data_t));
+    mtype.insertMember("data_header", HOFFSET(pix_data_t, data_header), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("header", HOFFSET(pix_data_t, header), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("hit_index", HOFFSET(pix_data_t, hit_index), H5::PredType::NATIVE_UINT64);
+    mtype.insertMember("x", HOFFSET(pix_data_t, x), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("y", HOFFSET(pix_data_t, y), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("TOA", HOFFSET(pix_data_t, TOA), H5::PredType::NATIVE_UINT16);
+    mtype.insertMember("TOT", HOFFSET(pix_data_t, TOT), H5::PredType::NATIVE_UINT16);
+    mtype.insertMember("EventCounter", HOFFSET(pix_data_t, EventCounter), H5::PredType::NATIVE_UINT16);
+    mtype.insertMember("HitCounter", HOFFSET(pix_data_t, HitCounter), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("FTOA", HOFFSET(pix_data_t, FTOA), H5::PredType::NATIVE_UINT8);
+    mtype.insertMember("scan_param_id", HOFFSET(pix_data_t, scan_param_id), H5::PredType::NATIVE_UINT16);
+    mtype.insertMember("chunk_start_time", HOFFSET(pix_data_t, chunk_start_time), H5::PredType::NATIVE_FLOAT);
+    mtype.insertMember("iTOT", HOFFSET(pix_data_t, iTOT), H5::PredType::NATIVE_UINT16);
+    mtype.insertMember("TOA_Extension", HOFFSET(pix_data_t, TOA_Extension), H5::PredType::NATIVE_UINT64);
+    mtype.insertMember("TOA_Combined", HOFFSET(pix_data_t, TOA_Combined), H5::PredType::NATIVE_UINT64);
+
+    hsize_t dims[1] = {0};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};
+    H5::DataSpace dataspace(1, dims, maxdims);
+    H5::DSetCreatPropList plist;
+    hsize_t chunk_dims[1] = {10};
+    plist.setChunk(1, chunk_dims);
+    plist.setDeflate(2);
+
+    return sub_group.createDataSet("hit_data", mtype, dataspace, plist);
+}
+
+void append_rows(H5::DataSet& dataset, const std::vector<pix_data_t>& rows) {
+    // Get size of the dataset
+    H5::DataSpace filespace = dataset.getSpace();
+    hsize_t curr_dims[1];
+    filespace.getSimpleExtentDims(curr_dims, NULL);
+
+    // Calculate new size of the dataset
+    hsize_t new_dims[1] = {curr_dims[0] + rows.size()};
+    dataset.extend(new_dims);
+
+    // Add the new rows
+    H5::DataSpace new_filespace = dataset.getSpace();
+    hsize_t offset[1] = {curr_dims[0]};
+    hsize_t count[1] = {rows.size()};
+    new_filespace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+    H5::DataSpace memspace(1, count);
+    dataset.write(rows.data(), dataset.getCompType(), memspace, new_filespace);
+}
 
 /**
  * Execute a shell command
