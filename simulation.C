@@ -6,10 +6,13 @@
 #include <string>
 #include <sys/stat.h>
 #include <time.h>
+#include <chrono>
 #include "stdio.h"
 #include <unistd.h>
 #include <cstdlib>
 #include "H5Cpp.h"
+#include <vector>
+#include <algorithm>
 
 #include <TCanvas.h>
 #include <TROOT.h>
@@ -640,42 +643,45 @@ int main(int argc, char *argv[]){
     double pixelsize = 0.0055;
     const int pixel = 256; //in one direction
     int hits[pixel][pixel];
+    int toas[pixel][pixel];
+    int ftoas[pixel][pixel];
 
     bool create_gasfile = true;
     string gasfile;
 
-    if (argc < 21){
-        cout << "There are missing some arguments. The command is ./simulation <path> <job> <absorption> <approach> <length> <energy> <gas1> <gas2> <percentage1> <percentage2> <temperature> <pressure> <field> <polarization> <angle_offset> <amp_scaling> <amp_gain> <amp_width> <events> <degrad_output> <tar>" << endl;
+    if (argc < 22){
+        cout << "There are missing some arguments. The command is ./simulation <path> <job> <absorption> <approach> <length> <energy> <gas1> <gas2> <percentage1> <percentage2> <temperature> <pressure> <field> <polarization> <angle_offset> <amp_scaling> <amp_gain> <amp_width> <events> <degrad_output> <tar> <asic>" << endl;
         cout << "If no gasfile is provided a new one is generated (takes a couple of hours)" << endl;
         return 1;
     }
-    if (argc == 22){
+    if (argc == 23){
         gasfile = argv[1];
         create_gasfile = false;
     }
     else{
         create_gasfile = true;
     }
-    int job = atoi(argv[argc - 20]);
-    int absorption_approach = atoi(argv[argc - 19]);
-    int simulation_approach = atoi(argv[argc - 18]);
-    double length = atof(argv[argc - 17]);
-    double energy = atof(argv[argc - 16]);
-    string gas1 = argv[argc - 15];
-    string gas2 = argv[argc - 14];
-    double percentage1 = atof(argv[argc - 13]);
-    double percentage2 = atof(argv[argc - 12]);
-    double temperature = atof(argv[argc - 11]);
-    double pressure = atof(argv[argc - 10]);
-    double efield = atof(argv[argc - 9]);
-    double polarization = atof(argv[argc - 8]);
-    double angle_offset = atof(argv[argc - 7]);
-    double amplification_scaling = atof(argv[argc - 6]);
-    double amplification_gain = atof(argv[argc - 5]);
-    double amplification_width = atof(argv[argc - 4]);
-    int nEvents = atoi(argv[argc - 3]);
-    int degrad_output = atoi(argv[argc - 2]);
-    int tar = atoi(argv[argc - 1]);
+    int job = atoi(argv[argc - 21]);
+    int absorption_approach = atoi(argv[argc - 20]);
+    int simulation_approach = atoi(argv[argc - 19]);
+    double length = atof(argv[argc - 18]);
+    double energy = atof(argv[argc - 17]);
+    string gas1 = argv[argc - 16];
+    string gas2 = argv[argc - 15];
+    double percentage1 = atof(argv[argc - 14]);
+    double percentage2 = atof(argv[argc - 13]);
+    double temperature = atof(argv[argc - 12]);
+    double pressure = atof(argv[argc - 11]);
+    double efield = atof(argv[argc - 10]);
+    double polarization = atof(argv[argc - 9]);
+    double angle_offset = atof(argv[argc - 8]);
+    double amplification_scaling = atof(argv[argc - 7]);
+    double amplification_gain = atof(argv[argc - 6]);
+    double amplification_width = atof(argv[argc - 5]);
+    int nEvents = atoi(argv[argc - 4]);
+    int degrad_output = atoi(argv[argc - 3]);
+    int tar = atoi(argv[argc - 2]);
+    int asic = atoi(argv[argc - 1]);
 
     if (create_gasfile){
         cout << "MAGBOLTZ: Generate gasfile" << endl;
@@ -690,6 +696,17 @@ int main(int argc, char *argv[]){
     string degrad_dir = "Run_" + fixedLength(job) + "_" + date() + "_" + time() + "_degrad";
     if(degrad_output == 1){
         mkdir(degrad_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    }
+
+    H5::DataSet dataset;
+    if (asic == 0 || asic == 3){
+        // Initialize the hdf5 file for Timepix3 data
+        const H5std_string FILE_NAME(dir + ".h5");
+        H5::H5File file(FILE_NAME, H5F_ACC_TRUNC);
+        H5::Group group(file.createGroup("/interpreted"));
+        H5::Group sub_group = group.createGroup("run_0");
+        create_configuration(sub_group);
+        dataset = initialize_table(group, sub_group);
     }
 
     // Create the filename for the photoelectrons file
@@ -759,6 +776,8 @@ int main(int argc, char *argv[]){
         for (int l = 0; l < pixel; l++){
             for (int m = 0; m < pixel; m++){
                 hits[l][m] = 0;
+                toas[l][m] = 0;
+                ftoas[l][m] = 0;
             }
         }
 
@@ -808,9 +827,11 @@ int main(int argc, char *argv[]){
             position = absoption_curve.GetRandom();
         }
 
-        string file = dir + filename + ".txt";
         fstream f;
-        f.open(file, ios::out);
+        if (asic == 0 || asic == 1){
+            string file = dir + filename + ".txt";
+            f.open(file, ios::out);
+        }
 
         cout << "GARFIELD: Final position: " << position << endl;
 
@@ -883,13 +904,16 @@ int main(int argc, char *argv[]){
             else if(simulation_approach == 2){
                 // Calculate diffusion sigma based on electron z position and diffusion coefficient
                 double sigma = 10000 * el_Tdiff * TMath::Sqrt(position + (z / 10000.));
+                double t_mean = (position + (z / 10000.)) / el_vel;
                 double a = degrad_random.Gaus(0, sigma);
                 double b = degrad_random.Gaus(0, sigma);
 
+                double sigmat = el_Ldiff * TMath::Sqrt(t_mean / el_vel);
+                t2 = t1 + degrad_random.Gaus(t_mean, sigmat);
+
                 // Get end point parameters for the electron
-                x2 = (rot_x + a)/ 10000.;
-                y2 = (rot_y + b)/ 10000.;
-                t2 = (position + (z / 10000.))/el_vel; // Preliminary - will also depend on longitudinal diffusion
+                x2 = (rot_x + a) / 10000.;
+                y2 = (rot_y + b) / 10000.;
             }
             else{
                 return -1;
@@ -912,6 +936,8 @@ int main(int argc, char *argv[]){
             }
             // Store the hit and the gain in a matrix
             hits[posx][posy] += (int)amp;
+            toas[posx][posy] = toa;
+            ftoas[posx][posy] = ftoa;
         }
 
         // Close the degrad output file and move it in the runfolder with a new name based on the eventnumber
@@ -924,18 +950,42 @@ int main(int argc, char *argv[]){
 
         cout << endl;
 
+        std::vector<pix_data_t> pix_data_list = {};
+
+        // Get current unix timestamp as "chunk start time"
+        auto now = std::chrono::system_clock::now();
+        auto epoch = now.time_since_epoch();
+        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count()/1000.;
+
         // Write the TOS data file with the zerosupressed x, y and gain data
-        f << "FEC 0\n";
-        f << "Board 0\n";
-        f << "Chip 1 ,Hits: " << number << "\n";
+        if (asic == 0 || asic == 1){
+            f << "FEC 0\n";
+            f << "Board 0\n";
+            f << "Chip 1 ,Hits: " << number << "\n";
+        }
+        int extension = event * 1000000; //TODO
         for (int l = pixel - 1; l >= 0; l--){
             for (int m = pixel - 1; m >= 0; m--){
                 if (hits[m][l] != 0){
-                    f << m << " " << l << " " << hits[m][l] << "\n";
+                    if (asic == 0 || asic == 1){
+                        f << m << " " << l << " " << hits[m][l] << "\n";
+                    }
+
+                    //Write data for Timepix3 output
+                    pix_data_t new_row = {1, 11, 0, m, l, toas[m][l], hits[m][l], 0, 0, ftoas[m][l], 0, milliseconds, 0, extension, extension + toas[m][l]};
+                    pix_data_list.push_back(new_row);
                 }
             }
         }
-        f.close();
+        if (asic == 0 || asic == 3){
+            std::sort(pix_data_list.begin(), pix_data_list.end(), [](const pix_data_t &a, const pix_data_t &b) {
+                return a.TOA_Combined < b.TOA_Combined;
+            });
+            append_rows(dataset, pix_data_list);
+        }
+        if (asic == 0 || asic == 1){
+            f.close();
+        }
 
         event++;
         photoelectrons++;

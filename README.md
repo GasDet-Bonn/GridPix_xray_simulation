@@ -75,7 +75,7 @@ make
 Now the tool is ready to be used. It has several arguments that define the detector
 parameters. The tool can be stated with:
 ```
-./simulation <path> <job> <absorption> <approach> <length> <energy> <gas1> <gas2> <percentage1> <percentage2> <temperature> <pressure> <field> <polarization> <angle_offset> <amp_scaling> <amp_gain> <amp_width> <events> <degrad_output> <tar>
+./simulation <path> <job> <absorption> <approach> <length> <energy> <gas1> <gas2> <percentage1> <percentage2> <temperature> <pressure> <field> <polarization> <angle_offset> <amp_scaling> <amp_gain> <amp_width> <events> <degrad_output> <tar> <asic>
 ```
 These are the parameters:
 - `path` defines the path to a gas file which is used for the drift of the
@@ -95,7 +95,7 @@ These are the parameters:
    AvalancheMicroscopic is used and with 2 a monte carlo simulation based on
    the diffusion parameter is used.
 - `length` defines the length of the drift cylinder in cm
-- `energy` defines the energy of the incoming photons.
+- `energy` defines the energy of the incoming photons in eV.
 - `gas1` defines the name of the first gas component. For possible gases see
    below.
 - `gas2` defines the name of the second gas component. For possible gases see
@@ -113,6 +113,8 @@ These are the parameters:
 - `events` defines the number of events that should be simulated
 - `degrad_output` defines if degrad in and out files are stored (1) or not (0)
 - `tar` defines if the events are packed into a tar.gz file (1) or not(0)
+- `asic` defines if the data output is as for a Timepix (1) or a Timepix3 (3).
+   With 0 both outputs are used.
 
 ## Gases
 The following gases are supported:
@@ -175,7 +177,6 @@ The following gases are supported:
 | CCL4             |                |
 
 ## Planned for the future
-- Timepix3/GridPix3 support
 - Consideration of z-boost of photoelectrons
 - Optional gas gain simulation based on tracking
 - Monte carlo of the Grid collection efficiency
