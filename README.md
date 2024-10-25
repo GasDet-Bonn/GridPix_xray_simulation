@@ -55,6 +55,10 @@ As a workaround add `-fallow-argument-mismatch` for the compiler.
                Therefore there needs to be a small change in degrad (here for
                version 3.15): In lines 24780 and 34303 delete `*R3`.
 
+### HDF5
+For the Timepix3 interface of the simulation HDF5 is needed. Installing the packages
+`libhdf5-dev` and `hdf5-tools` should be sufficient.
+
 ## Usage
 To use the simulation tool it must be compiled in a first step. Therefore create
 a new folder "build" and change into it:
