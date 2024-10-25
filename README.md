@@ -109,7 +109,8 @@ These are the parameters:
    polarization in x-direction)
 - `angle_offset` defines the direction of the polarisation plane in radian
 - `amp_scaling`, `amp_gain` and `amp_width` are the fit parameters of the polya
-   distribution for the simulation of the gas gain
+   distribution for the simulation of the gas gain. If all are set to 0 then just
+   the number of primary electrons per pixel without amplification is counted.
 - `events` defines the number of events that should be simulated
 - `degrad_output` defines if degrad in and out files are stored (1) or not (0)
 - `tar` defines if the events are packed into a tar.gz file (1) or not(0)

@@ -919,8 +919,15 @@ int main(int argc, char *argv[]){
                 return -1;
             }
 
-            // Draw a gas gain from the polya distribution
-            double amp = polya.GetRandom();
+            double amp;
+            if (amplification_scaling == 0.0 && amplification_gain == 0.0 && amplification_width == 0.0){
+                // The amplification is exactly 1 to just count the primary electrons per pixel
+                amp = 1;
+            }
+            else{
+                // Draw a gas gain from the polya distribution
+                amp = polya.GetRandom();
+            }
             //cout << "\t z_start: " << position + (z / 10000.) << "\t z_stop: " << z2 << "\t electrons: " << amp << "\t status: " << status << endl; // Debug output
 
             // Get the pixelcoordinates oh the electron
