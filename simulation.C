@@ -53,7 +53,7 @@ struct pix_data_t {
     uint8_t HitCounter;
     uint8_t FTOA;
     uint16_t scan_param_id;
-    float chunk_start_time;
+    double_t chunk_start_time;
     uint16_t iTOT;
     uint64_t TOA_Extension;
     uint64_t TOA_Combined;
@@ -126,7 +126,7 @@ void create_configuration(H5::Group& sub_group) {
 H5::DataSet initialize_table(H5::Group& group, H5::Group& sub_group){
 
     H5std_string timepix_version("Timepix3");
-    H5::StrType str_type_timepix_version(H5::PredType::C_S1, timepix_version.length() + 1);
+    H5::StrType str_type_timepix_version(H5::PredType::C_S1, timepix_version.length());
     H5::Attribute attr = group.createAttribute("TimepixVersion", str_type_timepix_version, H5::DataSpace(H5S_SCALAR));
     attr.write(str_type_timepix_version, timepix_version);
 
@@ -135,12 +135,12 @@ H5::DataSet initialize_table(H5::Group& group, H5::Group& sub_group){
     attr_center_chip.write(H5::PredType::NATIVE_INT, &center_chip);
 
     H5std_string run_folder_kind("rfUnknown");
-    H5::StrType str_type_run_folder_kind(H5::PredType::C_S1, run_folder_kind.length() + 1);
+    H5::StrType str_type_run_folder_kind(H5::PredType::C_S1, run_folder_kind.length());
     H5::Attribute attr_run_folder_kind = group.createAttribute("runFolderKind", str_type_run_folder_kind, H5::DataSpace(H5S_SCALAR));
     attr_run_folder_kind.write(str_type_run_folder_kind, run_folder_kind);
 
     H5std_string run_type("rfXrayFinger");
-    H5::StrType str_type_run_type(H5::PredType::C_S1, run_type.length() + 1);
+    H5::StrType str_type_run_type(H5::PredType::C_S1, run_type.length());
     H5::Attribute attr_run_type = group.createAttribute("runType", str_type_run_type, H5::DataSpace(H5S_SCALAR));
     attr_run_type.write(str_type_run_type, run_type);
 
@@ -173,7 +173,7 @@ H5::DataSet initialize_table(H5::Group& group, H5::Group& sub_group){
     mtype.insertMember("HitCounter", HOFFSET(pix_data_t, HitCounter), H5::PredType::NATIVE_UINT8);
     mtype.insertMember("FTOA", HOFFSET(pix_data_t, FTOA), H5::PredType::NATIVE_UINT8);
     mtype.insertMember("scan_param_id", HOFFSET(pix_data_t, scan_param_id), H5::PredType::NATIVE_UINT16);
-    mtype.insertMember("chunk_start_time", HOFFSET(pix_data_t, chunk_start_time), H5::PredType::NATIVE_FLOAT);
+    mtype.insertMember("chunk_start_time", HOFFSET(pix_data_t, chunk_start_time), H5::PredType::NATIVE_DOUBLE);
     mtype.insertMember("iTOT", HOFFSET(pix_data_t, iTOT), H5::PredType::NATIVE_UINT16);
     mtype.insertMember("TOA_Extension", HOFFSET(pix_data_t, TOA_Extension), H5::PredType::NATIVE_UINT64);
     mtype.insertMember("TOA_Combined", HOFFSET(pix_data_t, TOA_Combined), H5::PredType::NATIVE_UINT64);
@@ -643,8 +643,8 @@ int main(int argc, char *argv[]){
     double pixelsize = 0.0055;
     const int pixel = 256; //in one direction
     int hits[pixel][pixel];
-    int toas[pixel][pixel];
-    int ftoas[pixel][pixel];
+    uint16_t toas[pixel][pixel];
+    uint8_t ftoas[pixel][pixel];
 
     bool create_gasfile = true;
     string gasfile;
@@ -769,6 +769,7 @@ int main(int argc, char *argv[]){
 
     int event = 0;
     int photoelectrons = 0;
+    uint64_t hit = 1;
     while (true){
         int number = 0; //of activated pixels
 
@@ -962,7 +963,7 @@ int main(int argc, char *argv[]){
         // Get current unix timestamp as "chunk start time"
         auto now = std::chrono::system_clock::now();
         auto epoch = now.time_since_epoch();
-        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count()/1000.;
+        double milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count()/1000.;
 
         // Write the TOS data file with the zerosupressed x, y and gain data
         if (asic == 0 || asic == 1){
@@ -970,19 +971,25 @@ int main(int argc, char *argv[]){
             f << "Board 0\n";
             f << "Chip 1 ,Hits: " << number << "\n";
         }
-        int extension = event * 1000000; //TODO
+        uint64_t extension = event * 1000; //TODO
+        uint8_t y_el = 255;
         for (int l = pixel - 1; l >= 0; l--){
+            uint8_t x_el = 255;
             for (int m = pixel - 1; m >= 0; m--){
+                //std::cout << l << "\t" << m << std::endl;
                 if (hits[m][l] != 0){
                     if (asic == 0 || asic == 1){
                         f << m << " " << l << " " << hits[m][l] << "\n";
                     }
 
                     //Write data for Timepix3 output
-                    pix_data_t new_row = {1, 11, 0, m, l, toas[m][l], hits[m][l], 0, 0, ftoas[m][l], 0, milliseconds, 0, extension, extension + toas[m][l]};
+                    pix_data_t new_row = {1, 11, hit, x_el, y_el, toas[m][l], hits[m][l], 0, 0, ftoas[m][l], 1, milliseconds, 0, extension, extension + toas[m][l]};
                     pix_data_list.push_back(new_row);
+                    hit++;
                 }
+                x_el--;
             }
+            y_el--;
         }
         if (asic == 0 || asic == 3){
             std::sort(pix_data_list.begin(), pix_data_list.end(), [](const pix_data_t &a, const pix_data_t &b) {
