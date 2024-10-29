@@ -934,8 +934,8 @@ int main(int argc, char *argv[]){
             // Get the pixelcoordinates oh the electron
             int posx = floor((x2 + 0.7) / pixelsize);
             int posy = floor((y2 + 0.7) / pixelsize);
-            int toa = floor(t2 / 25); // 40 MHz clock
-            int ftoa = 16 - floor((t2 - toa * 25) / 1.5625); // 640 MHz clock
+            uint16_t toa = floor(t2 / 25); // 40 MHz clock
+            uint8_t ftoa = 15 - floor((t2 - toa * 25) / 1.5625); // 640 MHz clock
             if(posx < 0 || posx > 255 || posy < 0 || posy > 255){
                 continue;
             }
