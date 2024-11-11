@@ -877,6 +877,8 @@ int main(int argc, char *argv[]){
         polya.SetParameter(1, amplification_gain); //gain
         polya.SetParameter(2, amplification_width); //width
 
+        double time_cut = 0.0;
+
         // Iterate over all secondary electrons of the photoelectron track and drift them to the readout
         for (Int_t iclus = 0; iclus < nclus; iclus++){
             cout << "\rGARFIELD: Electron: " << iclus + 1 << " of " << nclus << flush;
@@ -887,6 +889,15 @@ int main(int argc, char *argv[]){
             // Rotate secondary electron start coordinates by defined angle
             double rot_x = x * TMath::Cos(angle) - y * TMath::Sin(angle);
             double rot_y = x * TMath::Sin(angle) + y * TMath::Cos(angle);
+
+            // Ignore primary electrons below the grid and primary electrons created after this
+            if(time_cut != 0.0 && t > time_cut){
+                continue;
+            }
+            if(position + (z / 10000.) < 0){
+                time_cut = t;
+                continue;
+            }
 
             if(simulation_approach == 0){
                 std::unique_ptr<AvalancheMC> aval = std::make_unique<AvalancheMC>();
