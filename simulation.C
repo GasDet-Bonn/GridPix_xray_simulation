@@ -785,8 +785,8 @@ int main(int argc, char *argv[]){
         cout << "GARFIELD: photon " << event << endl;
 
         TF1 angles = TF1("angles","[0]*TMath::Cos(x) * TMath::Cos(x)+[1]", 0, 2*TMath::Pi());
-        angles.SetParameter(0, 1 - (1 - polarization) / (1 + polarization));
-        angles.SetParameter(1, (1 - polarization) / (1 + polarization));
+        angles.SetParameter(0, polarization);
+        angles.SetParameter(1, (1 - polarization));
         double angle = angles.GetRandom() + angle_offset;
 
         // Generate the filenames for the current event
