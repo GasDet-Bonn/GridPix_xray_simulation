@@ -181,6 +181,14 @@ The following gases are supported:
 | N-Pentane        |                |
 | CCL4             |                |
 
+## Get parameters from the gasfile
+When compiling the simulation a second script is compiled that can be used to read the drift velocity and the diffusion coefficients from it.
+It can be used by:
+```
+./gasparameters <path>
+```
+Here `path` should be a gasfile.
+
 ## Planned for the future
 - Consideration of z-boost of photoelectrons
 - Optional gas gain simulation based on tracking
