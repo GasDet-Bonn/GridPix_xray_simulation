@@ -994,7 +994,13 @@ int main(int argc, char *argv[]){
                     }
 
                     //Write data for Timepix3 output
-                    pix_data_t new_row = {1, 11, hit, x_el, y_el, toas[m][l], hits[m][l], 0, 0, ftoas[m][l], 1, milliseconds, 0, extension, extension + toas[m][l]};
+                    pix_data_t new_row = {1, 11, hit, x_el, y_el,
+                        static_cast<uint16_t>(toas[m][l]), 
+                        static_cast<uint16_t>(hits[m][l]), 
+                        0, 0, ftoas[m][l], 1, milliseconds, 0, 
+                        static_cast<uint16_t>(extension), 
+                        static_cast<uint16_t>(extension + toas[m][l])
+                    };
                     pix_data_list.push_back(new_row);
                     hit++;
                 }
