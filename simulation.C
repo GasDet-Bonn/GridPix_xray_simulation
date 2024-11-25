@@ -87,7 +87,7 @@ herr_t copy_group_elements(hid_t loc_id, const char* name, const H5L_info_t* inf
     H5::Group src_group(loc_id);
 
     H5O_info_t obj_info;
-    H5Oget_info_by_name(src_group.getId(), name, &obj_info, H5P_DEFAULT);
+    H5Oget_info_by_name3(src_group.getId(), name, &obj_info, H5O_INFO_ALL, H5P_DEFAULT);
 
     if (obj_info.type == H5O_TYPE_GROUP) {
         H5::Group src_sub_group = src_group.openGroup(name);
